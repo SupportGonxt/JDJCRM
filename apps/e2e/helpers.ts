@@ -3,6 +3,7 @@ import { createHmac } from 'node:crypto';
 import type { Browser, BrowserContextOptions, Page } from '@playwright/test';
 
 export const PASSWORD = 'Demo!crm2026';
+export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'ChangeMe!2026'; // the demo admin; a real install sets its own
 export const HOSPITAL = { latitude: -25.7479, longitude: 28.2293 }; // Demo General Hospital
 
 export async function signIn(browser: Browser, email: string, opts: BrowserContextOptions = {}): Promise<Page> {
@@ -10,7 +11,7 @@ export async function signIn(browser: Browser, email: string, opts: BrowserConte
   const page = await ctx.newPage();
   await page.goto('/login');
   await page.getByLabel('E-mail or username').fill(email);
-  await page.getByLabel('Password').fill(email === 'admin@crm.local' ? 'ChangeMe!2026' : PASSWORD);
+  await page.getByLabel('Password').fill(email === 'admin@crm.local' ? ADMIN_PASSWORD : PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page.waitForURL((u) => !u.pathname.startsWith('/login'));
   return page;

@@ -35,7 +35,7 @@ const SPECS: Spec[] = [
       { key: 'department_id', label: 'Department', type: 'select', options: depts, list: true, hint: 'Required for department roles. Client Services staff belong to Client Services.' },
       { key: 'site_id', label: 'Site', type: 'select', options: sites },
       { key: 'auth', label: 'Sign-in', type: 'select', options: () => [['local', 'Local'], ['ad', 'Active Directory']], list: true },
-      { key: 'password', label: 'Set password', type: 'password', hint: 'Min 10 characters. Leave blank to keep. Local accounts only.' },
+      { key: 'password', label: 'Set password', type: 'password', hint: 'Local accounts only. Leave blank on a new account to e-mail an invitation (the person chooses their own password). Min 10 characters.' },
       { key: 'active', label: 'Active', type: 'bool', list: true },
     ],
   },
@@ -206,6 +206,7 @@ function Resource({ spec, lk }: { spec: Spec; lk: Lookups }) {
               <div className="flex flex-wrap gap-4 rounded-lg bg-surface-2 p-3 text-sm">
                 <label className="flex items-center gap-2"><input type="checkbox" onChange={(e) => setEdit({ ...edit, row: { ...edit.row, reset_mfa: e.target.checked } })} className="accent-[var(--brand)]" />Reset two-factor</label>
                 <label className="flex items-center gap-2"><input type="checkbox" onChange={(e) => setEdit({ ...edit, row: { ...edit.row, unlock: e.target.checked } })} className="accent-[var(--brand)]" />Unlock account</label>
+                {edit.row.auth === 'local' && <label className="flex items-center gap-2"><input type="checkbox" onChange={(e) => setEdit({ ...edit, row: { ...edit.row, send_invite: e.target.checked } })} className="accent-[var(--brand)]" />E-mail a link to set a new password</label>}
               </div>
             )}
             <ErrorText error={save.error} />
@@ -241,6 +242,7 @@ function SystemStatus() {
       </Card>
       <Card title="System">
         <Row ok={null} label="Database" value={`${bytes(s.database.bytes)} · ${s.database.tickets.toLocaleString()} queries · ${s.database.bleeds.toLocaleString()} bleeds · ${s.database.users} active users · ${s.database.sessions} sessions`} />
+        <Row ok={null} label="Version" value={s.api.version} />
         <Row ok={null} label="API instance" value={`${s.api.host} · up ${Math.round(s.api.uptime_s / 3600)} h · Node ${s.api.node}`} />
         <Row ok={null} label="Schema migrations" value={s.migrations.map((m: any) => m.name.replace('.sql', '')).join(', ')} />
         <Row ok={null} label="PostgreSQL" value={String(s.database.version).split(' on ')[0]} />
@@ -292,11 +294,63 @@ export function Admin() {
         <p className="mt-0.5 text-sm text-muted">Users, routing, time limits and hospitals: all changes apply immediately and are audited.</p>
       </div>
       <nav className="flex gap-1 overflow-x-auto border-b border-line">
-        {[['status', 'System status'], ...SPECS.map((s) => [s.res, s.label]), ['audit', 'Audit trail']].map(([k, l]) => (
+        {[['status', 'System status'], ...SPECS.map((s) => [s.res, s.label]), ['import', 'Bulk import'], ['audit', 'Audit trail']].map(([k, l]) => (
           <NavLink key={k} to={`/admin/${k}`} className={cx('border-b-2 px-3 py-2 text-sm whitespace-nowrap', tab === k ? 'border-brand font-medium text-brand' : 'border-transparent text-muted hover:text-text')}>{l}</NavLink>
         ))}
       </nav>
-      {tab === 'audit' ? <Audit /> : tab === 'status' ? <SystemStatus /> : spec && lk ? <Resource key={spec.res} spec={spec} lk={lk} /> : null}
+      {tab === 'audit' ? <Audit /> : tab === 'status' ? <SystemStatus /> : tab === 'import' ? <Import /> : spec && lk ? <Resource key={spec.res} spec={spec} lk={lk} /> : null}
     </div>
+  );
+}
+
+/** Go-live loading: practices & hospitals, and Active Directory users, from CSV. Checked first, applied all-or-nothing. */
+function Import() {
+  const qc = useQueryClient();
+  const [kind, setKind] = useState<'organisations' | 'users'>('organisations');
+  const [csv, setCsv] = useState('');
+  const [result, setResult] = useState<any>(null);
+  const run = useMutation({
+    mutationFn: (apply: boolean) => api(`/admin/import/${kind}`, { body: { csv, apply } }),
+    onSuccess: (r: any) => { setResult(r); if (r.applied) { qc.invalidateQueries({ queryKey: ['admin'] }); qc.invalidateQueries({ queryKey: ['lookups'] }); } },
+  });
+  const checked = result && !result.applied && !result.errors.length;
+  return (
+    <Card title="Bulk import">
+      <p className="-mt-1 mb-4 text-sm text-muted">
+        Load practices and hospitals (with GPS position and geofence), or users, from a CSV file. Existing rows with the same name (or e-mail) are updated.
+        AD users sign in with their network login; new local users (auth = local) are e-mailed an invitation to choose their password. Check first: nothing is written unless every row is valid.
+      </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="What to import">
+          <Select value={kind} onChange={(e) => { setKind(e.target.value as any); setResult(null); }}>
+            <option value="organisations">Practices &amp; hospitals</option>
+            <option value="users">Users (AD, or local with an e-mailed invitation)</option>
+          </Select>
+        </Field>
+        <a className="inline-flex h-10 items-center text-sm text-brand underline" href={`/api/admin/import/${kind}/template.csv`}>Download the template</a>
+        <label className="inline-flex h-10 cursor-pointer items-center rounded-lg border border-line px-3 text-sm hover:bg-surface-2">
+          Choose CSV file
+          <input type="file" accept=".csv,text/csv" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (f) { setCsv(await f.text()); setResult(null); } }} />
+        </label>
+      </div>
+      <Field label="CSV" className="mt-4"><Textarea rows={8} className="num text-xs" value={csv} onChange={(e) => { setCsv(e.target.value); setResult(null); }} placeholder="Paste CSV here, with the header row from the template" /></Field>
+      <div className="mt-3 flex gap-2">
+        <Button variant="outline" disabled={!csv || run.isPending} onClick={() => run.mutate(false)}>Check</Button>
+        <Button disabled={!checked || run.isPending} onClick={() => run.mutate(true)}>Import {checked ? `${result.rows} rows` : ''}</Button>
+      </div>
+      <ErrorText error={run.error} />
+      {result && (
+        <div className="mt-4 text-sm" role="status">
+          {result.applied
+            ? <p className="text-ok">Imported: {result.created} created, {result.updated} updated{result.invited ? `, ${result.invited} invitation${result.invited > 1 ? 's' : ''} e-mailed` : ''}.</p>
+            : result.errors.length
+              ? <>
+                  <p className="font-medium text-bad">{result.errors.length} row{result.errors.length > 1 && 's'} to fix. Nothing was imported.</p>
+                  <ul className="mt-2 max-h-60 list-disc space-y-0.5 overflow-auto pl-5">{result.errors.map((e: any) => <li key={e.line}>Line {e.line}: {e.message}</li>)}</ul>
+                </>
+              : <p>All {result.rows} rows are valid: {result.created} to create, {result.updated} to update. Press Import to apply.</p>}
+        </div>
+      )}
+    </Card>
   );
 }

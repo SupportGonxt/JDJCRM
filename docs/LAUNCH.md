@@ -25,8 +25,35 @@
 | Accessibility | WCAG 2.1 AA scan of every main screen (desktop and phone, light and dark). It fails on any serious or critical issue. |
 | Performance | 100,000 queries and 20,000 bleeds: every board, search, dashboard and export is timed against a budget. |
 | Android | APK builds with the native mock-location check (`android.yml`, run on demand). |
+| First administrator | The installer generates a strong password (shown once). The seed refuses an empty, short or demo password. |
+| Demo data | `--demo` is refused on a database that holds real accounts. |
+| Registration | Invitation e-mails for local users, admin or CSV; links are single-use and expire. "Forgot password" never reveals whether an account exists and is rate-limited. |
+| Bulk import | Practices and hospitals (geofence validated) and users from CSV. Every row is checked; nothing is written unless all rows are valid. |
+| Readiness | `/api/health/ready` returns 503 until the database, worker and disk are all healthy. CI waits on it. |
+| Supply chain | `npm audit` (high or critical fails the build) and a Trivy scan of both images (fixable high or critical fails). |
+| Logs | Capped at 5 × 10 MB per container. |
 
-Totals: 73 API/DB tests and 16 browser tests. The browser tests run against the dev servers **and** the Docker stack.
+Totals: 79 API/DB tests and 18 browser tests. The browser tests run against the dev servers **and** the Docker stack.
+
+## Decisions JDJ must make before go-live
+
+1. **How nurses' phones reach the server.** It is on-premise at an internal address (`crm.jdj.local`); nurses at hospitals use mobile data. Choose one:
+   - a VPN on the phones, pushed by MDM;
+   - publish through a DMZ reverse proxy with a public name and certificate.
+
+   The same question applies to SkyLIMS if Mukon hosts it in the cloud.
+2. **Recovery targets.** Today backups are nightly on one host: up to 24 h of data could be lost, and recovery means a restore. If that is too much, add continuous database log archiving (point-in-time recovery) or a standby server.
+3. **POPIA.**
+   - Register the Information Officer.
+   - Give nurses a privacy notice about the location captured at checkpoints (staff monitoring).
+   - Sign a data-processing agreement with whoever hosts or supports the system.
+   - Complete a privacy impact assessment.
+4. **Independent penetration test** before real patient data goes in.
+5. **Business configuration.**
+   - Time limits per category and priority, and the bleed stage limits (the brief says TBC).
+   - The SkyLIMS message mapping, confirmed with Mukon.
+   - Report distribution lists.
+6. **Cut-over.** Finish queries and bleeds already open in the old process there, and start fresh in Pelo CRM. Agree day-one support: who users call, and the escalation path.
 
 ## On-site checks before go-live (need JDJ's systems)
 
@@ -55,5 +82,9 @@ Tick each one in the production environment.
   - Off-site copy is configured.
   - `secrets/master_key` is stored in the password vault.
   - One restore drill has been done on a spare host.
-- [ ] **Remove demo data.** Production is installed with `init.sh` only (no `--demo`). Demo users must not exist.
+- [ ] **Release.** Install from a tagged release tarball (`vX.Y.Z`, see the runbook). System status shows that version.
+- [ ] **Monitoring.** JDJ's monitoring watches `/api/health/ready`, disk space and certificate expiry (runbook → Monitoring).
+- [ ] **Data loaded.** Practices, hospitals and users imported (Administration → Bulk import); invitations accepted.
+- [ ] **Training.** Each team has its [one-page guide](guides/README.md).
+- [ ] **No demo data.** Production is installed with `init.sh` only (no `--demo`, which is refused once real accounts exist).
 - [ ] **Sign-off.** One CS agent, one department responder, one nurse and one manager each complete their journey with a real (test) patient.

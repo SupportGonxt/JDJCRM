@@ -58,6 +58,6 @@ export async function status() {
     database: { ...db, bytes: Number(db.bytes), audit_intact: db.audit_broken_at == null },
     files: { ...dirSize(`${env.dataDir}/blobs`), disk },
     migrations,
-    api: { host: hostname(), uptime_s: Math.round(process.uptime()), node: process.version },
+    api: { host: hostname(), uptime_s: Math.round(process.uptime()), node: process.version, version: process.env.APP_VERSION ?? 'dev' },
   };
 }

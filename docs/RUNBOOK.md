@@ -19,8 +19,11 @@ Everything here runs on the Docker host, from the repository directory. Times ar
    | `LDAP_*` | optional, for AD sign-in |
 
 3. Run `./scripts/init.sh`. It generates `secrets/`, builds, starts, runs the migrations and creates the administrator.
+   - If `ADMIN_PASSWORD` in `.env` is empty, the script generates a strong password and **shows it once**. Write it down; it is not stored.
+   - The installer refuses a short password or the demo password.
 4. **Store `secrets/master_key` in the password vault now.** Backups do not contain it, and attachments and bleed photos cannot be decrypted without it.
-5. Sign in as the administrator. You must set up two-factor sign-in first. Then configure:
+5. Sign in as the administrator. You must set up two-factor sign-in first. Then load and configure:
+   - **Administration → Bulk import.** Practices and hospitals (with GPS and geofence) and users, from CSV. Download the template, **Check**, fix any listed lines, then **Import**. Nothing is written unless every row is valid.
    - sites and working hours
    - public holidays (2026–27 are seeded)
    - departments, categories, routing and time limits
@@ -73,18 +76,48 @@ Rotate yearly, or at once if the key may have leaked.
 - The old key is kept as `secrets/master_key.retired.<date>`, which you need to restore older backups.
 - Verified during development: after rotation, every photo decrypted with the new key and none with the old one.
 
-## Upgrades
+## Releases and upgrades
+
+Each release is a tag (`vX.Y.Z`). The **Release** workflow publishes one tarball of the images plus a SHA-256 checksum, so the server never builds from source.
 
 ```sh
-git pull && docker compose build && docker compose up -d
+sha256sum -c pelo-crm-X.Y.Z-images.tar.gz.sha256
+docker load < pelo-crm-X.Y.Z-images.tar.gz
+./scripts/backup.sh                       # always, before an upgrade
+sed -i 's/^BATON_VERSION=.*/BATON_VERSION=X.Y.Z/' .env   # add the line if missing
+docker compose up -d --no-build
 ```
 
-Migrations run automatically when the API starts, and each runs in a transaction. Take a backup first.
+- Migrations run automatically when the API starts, each in a transaction. They only move forward.
+- **Rollback:** restore the backup taken before the upgrade, then set the previous `BATON_VERSION` and run `docker compose up -d --no-build`.
+- **Check the version:** Administration → System status → Version, or `curl -sk https://<host>/api/health/ready`.
+- To cut a release, tag the commit on `main`, e.g. `git tag v1.0.0 && git push origin v1.0.0`.
+
+## Monitoring (from outside the application)
+
+The in-app watchdog e-mails through the application itself, so it cannot report that the application is down. Point JDJ's monitoring (e.g. Zabbix, PRTG or Uptime Kuma) at:
+
+| Check | Expect | Alert when |
+|---|---|---|
+| `GET https://<host>/api/health/ready` every minute | `200` with `{"ok":true,…}` | anything else for 3 minutes. `503` names the failing part: `database`, `worker` or `disk` (under 5% free). |
+| Host disk space | — | under 20% free |
+| TLS certificate expiry | — | under 21 days |
+| `docker compose ps` via the agent | all containers `running` / `healthy` | a container restarting |
+
+Container logs are capped at 5 × 10 MB per service, so logging cannot fill the disk.
 
 ## Air-gapped sites
 
-1. On a connected machine, run `docker compose build`, then `docker save baton-api baton-web postgres:16-alpine caddy:2-alpine | gzip > baton.tgz`.
-2. On the server, run `docker load < baton.tgz`, then `docker compose up -d`.
+The release tarball already contains every image (api, web, postgres). Copy it across with the repository checkout (for `docker-compose.yml`, `scripts/` and `docs/`), then follow **Releases and upgrades**. Nothing is downloaded at run time: the fonts are bundled.
+
+## Accounts and registration
+
+- **AD users** need no registration. They sign in with their network login, and their AD group sets role and department.
+- **Local users** (for example nurses or contractors outside AD):
+  - Administration → Users → **Add**, leaving the password blank, or Bulk import with `auth` = `local`.
+  - Each person is e-mailed a one-time link, valid 72 hours, to choose their own password. Roles with two-factor then enrol at first sign-in.
+  - To resend: edit the user, tick **E-mail a link to set a new password**, and save.
+- **Forgot password:** the sign-in page e-mails a reset link to local accounts (valid 1 hour, single use). The page gives the same answer whether or not the address exists. AD passwords are reset in AD.
 
 ## Incidents
 

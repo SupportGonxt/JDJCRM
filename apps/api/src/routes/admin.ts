@@ -5,6 +5,7 @@ import { ROLES } from '@baton/core';
 import { requirePerm } from '../auth';
 import { audit, fail, sql } from '../db';
 import { hashPassword } from '../crypto';
+import { sendLink } from '../invites';
 
 type Res = { pk?: string; cols: string[]; json?: string[]; del?: boolean; order: string };
 const R: Record<string, Res> = {
@@ -50,12 +51,16 @@ export function adminRoutes(app: FastifyInstance) {
     const row = pick(R[res], b);
     if (res === 'users') {
       const x = UserExtra.parse(b);
-      if (row.auth !== 'ad' && !x.password) fail(400, 'Local users need an initial password (min 10 characters)');
       if (x.password) row.password_hash = hashPassword(x.password);
     }
-    const [out] = await sql`insert into ${sql(res)} ${sql(row)} returning ${sql(R[res].pk ?? 'id')} as id`;
-    await audit(sql, { actor: req.user.id, action: `admin.${res}.created`, entity: res, id: out.id, data: { ...row, password_hash: undefined } });
-    return out;
+    return sql.begin(async (tx) => {
+      const [out] = await tx`insert into ${tx(res)} ${tx(row)} returning ${tx(R[res].pk ?? 'id')} as id`;
+      await audit(tx, { actor: req.user.id, action: `admin.${res}.created`, entity: res, id: out.id, data: { ...row, password_hash: undefined } });
+      // No password given for a local account: e-mail an invitation to choose one.
+      const invited = res === 'users' && row.auth !== 'ad' && !row.password_hash;
+      if (invited) await sendLink(tx, { id: out.id, email: String(row.email), name: String(row.name) }, 'invite', req.user.id);
+      return { ...out, invited };
+    });
   });
 
   app.put('/api/admin/:res/:id', async (req) => {
@@ -69,6 +74,12 @@ export function adminRoutes(app: FastifyInstance) {
       if (x.reset_mfa) Object.assign(row, { mfa_enabled: false, totp_secret: null });
       if (b.unlock) Object.assign(row, { failed_logins: 0, locked_until: null });
       if (x.password || x.reset_mfa || row.active === false) await sql`delete from sessions where user_id = ${id!}`;
+      if (b.send_invite) {
+        const [u] = await sql`select id, email, name, auth, password_hash from users where id = ${id!} and active`;
+        if (!u || u.auth !== 'local') fail(400, 'Invitations are for active local accounts; AD users sign in with their network login');
+        await sendLink(sql, u as any, u.password_hash ? 'reset' : 'invite', req.user.id);
+        if (!Object.keys(row).length) return { ok: true, sent: true };
+      }
     }
     if (!Object.keys(row).length) fail(400, 'Nothing to update');
     const [out] = await sql`update ${sql(res)} set ${sql(row)} where ${sql(R[res].pk ?? 'id')} = ${id!} returning 1`;

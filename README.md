@@ -218,6 +218,7 @@ apps/web        React 19 + Vite + TanStack Query + Tailwind v4 (PWA)
   - Read audit of every ticket and bleed opened.
   - A **POPIA access report** from Search (supervisor, management): every record about a person and everyone who viewed it.
   - Retention purges (`retention_days`).
+- **User guides** ([docs/guides](docs/guides/README.md)): one page per role, for launch training.
 - **Launch readiness** ([docs/LAUNCH.md](docs/LAUNCH.md)): what CI proves on every push, and the on-site checks before go-live.
 - **Operations** ([docs/RUNBOOK.md](docs/RUNBOOK.md)): backup, restore with audit-chain verification, master-key rotation (re-wraps file keys without rewriting files), upgrades, air-gapped install, incidents.
   - Restore and rotation were both drilled during development: identical row counts, chain intact, and every photo decrypts with the new key and none with the old.

@@ -10,7 +10,9 @@ COPY . .
 RUN npm run build
 
 FROM node:22-alpine AS api
-ENV NODE_ENV=production
+RUN apk upgrade --no-cache # pick up base-image security fixes at build time
+ARG APP_VERSION=dev
+ENV NODE_ENV=production APP_VERSION=$APP_VERSION
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/core/package.json packages/core/
@@ -27,5 +29,6 @@ HEALTHCHECK --interval=30s --timeout=5s CMD wget -qO- http://127.0.0.1:3000/api/
 CMD ["node", "dist/server.js"]
 
 FROM caddy:2-alpine AS web
+RUN apk upgrade --no-cache
 COPY docker/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /src/apps/web/dist /srv

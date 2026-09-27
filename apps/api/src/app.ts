@@ -13,6 +13,7 @@ import { dispatchRoutes } from './routes/dispatch';
 import { integrationRoutes } from './routes/integrations';
 import { miscRoutes } from './routes/misc';
 import { contactRoutes } from './routes/contacts';
+import { importRoutes } from './routes/import';
 import { ticketRoutes } from './routes/tickets';
 
 /** Every registered route, for the route-guard test. */
@@ -44,6 +45,7 @@ export async function buildApp() {
   ticketRoutes(app);
   contactRoutes(app);
   adminRoutes(app);
+  importRoutes(app);
   bleedRoutes(app);
   dashboardRoutes(app);
   complianceRoutes(app);

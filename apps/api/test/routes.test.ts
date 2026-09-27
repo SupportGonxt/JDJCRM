@@ -11,7 +11,7 @@ process.env.MASTER_KEY = randomBytes(32).toString('base64');
 process.env.DATA_DIR = mkdtempSync(`${tmpdir()}/baton-`);
 process.env.NODE_ENV = 'test';
 
-const PUBLIC = ['GET /api/health', 'POST /api/auth/login', 'POST /api/integrations/lis/events']; // LIS: HMAC-signed instead
+const PUBLIC = ['GET /api/health', 'GET /api/health/ready', 'POST /api/auth/forgot', 'GET /api/auth/token/:token', 'POST /api/auth/set-password', 'POST /api/auth/login', 'POST /api/integrations/lis/events']; // LIS: HMAC-signed instead; auth/*: single-use e-mailed tokens
 const PARTIAL = ['GET /api/me', 'POST /api/auth/logout', 'POST /api/auth/mfa/setup', 'POST /api/auth/mfa/verify'];
 
 describe.skipIf(!url)('route guard', async () => {
