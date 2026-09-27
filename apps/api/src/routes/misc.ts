@@ -1,11 +1,24 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { statfsSync } from 'node:fs';
 import { sql } from '../db';
+import { env } from '../env';
 
 export function miscRoutes(app: FastifyInstance) {
   app.get('/api/health', { config: { auth: 'public' } }, async () => {
     await sql`select 1`;
     return { ok: true };
+  });
+
+  // Readiness for external monitoring (JDJ's own tools): database, worker heartbeat, disk. Flags only, no data.
+  app.get('/api/health/ready', { config: { auth: 'public' } }, async (_req, reply) => {
+    const db = await sql`select value from settings where key = 'worker_heartbeat'`.then((r) => ({ ok: true, hb: r[0]?.value }), () => ({ ok: false, hb: null }));
+    const worker = !!db.hb && Date.now() - new Date(db.hb.at).getTime() < 5 * 60_000;
+    let disk = true;
+    try { const f = statfsSync(env.dataDir); disk = f.bavail / f.blocks > 0.05; } catch { /* not created yet */ }
+    const ok = db.ok && worker && disk;
+    reply.code(ok ? 200 : 503);
+    return { ok, database: db.ok, worker, disk, version: process.env.APP_VERSION ?? 'dev' };
   });
 
   // Reference data for forms and filters.

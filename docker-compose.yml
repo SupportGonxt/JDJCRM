@@ -24,10 +24,16 @@ x-api-env: &api-env
   LIS_TOKEN: ${LIS_TOKEN:-}
   TZ: Africa/Johannesburg
 
+# Container logs are capped (5 × 10 MB per service), so they can never fill the disk the database lives on.
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "5" }
+
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_USER: baton
       POSTGRES_DB: baton
@@ -41,9 +47,10 @@ services:
       retries: 10
 
   api:
-    build: { context: ., target: api }
+    build: { context: ., target: api, args: { APP_VERSION: "${BATON_VERSION:-dev}" } }
     image: baton-api:${BATON_VERSION:-latest}
     restart: unless-stopped
+    logging: *logging
     environment: *api-env
     secrets: [db_password, master_key]
     volumes: [blobs:/data, ./certs:/certs:ro] # ./certs: internal CA certificates for LDAPS / SMTP
@@ -52,6 +59,7 @@ services:
   worker:
     image: baton-api:${BATON_VERSION:-latest}
     restart: unless-stopped
+    logging: *logging
     command: ["node", "dist/worker.js"]
     environment: *api-env
     secrets: [db_password, master_key]
@@ -63,6 +71,7 @@ services:
     image: baton-api:${BATON_VERSION:-latest}
     profiles: [skylims]
     restart: unless-stopped
+    logging: *logging
     command: ["node", "dist/mllp.js"]
     environment:
       <<: *api-env
@@ -76,6 +85,7 @@ services:
     build: { context: ., target: web }
     image: baton-web:${BATON_VERSION:-latest}
     restart: unless-stopped
+    logging: *logging
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-crm.local}
     ports: ["80:80", "443:443"]
@@ -87,6 +97,7 @@ services:
   backup:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *logging
     environment: { TZ: Africa/Johannesburg }
     secrets: [db_password]
     volumes: [backups:/backups, blobs:/data:ro]

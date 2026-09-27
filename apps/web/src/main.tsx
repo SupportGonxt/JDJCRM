@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import './index.css';
 import { Shell } from './Shell';
-import { Login } from './pages/Login';
+import { Login, SetPassword } from './pages/Login';
 import { Tickets } from './pages/Tickets';
 import { NewTicket } from './pages/NewTicket';
 import { Ticket } from './pages/Ticket';
@@ -33,6 +33,7 @@ const qc = new QueryClient({
 
 const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
+  { path: '/set-password', element: <SetPassword /> },
   { path: '/wall', element: <Wall /> },
   { path: '/field', element: <FieldShell />, children: [{ index: true, element: <FieldHome /> }, { path: 'r/:id', element: <FieldRequest /> }] },
   {

@@ -33,8 +33,17 @@ const HOLIDAYS = [
   ['2027-09-24', 'Heritage Day'], ['2027-12-16', 'Day of Reconciliation'], ['2027-12-25', 'Christmas Day'], ['2027-12-27', 'Day of Goodwill (observed)'],
 ];
 
+const DEMO_ADMIN_PASSWORD = 'ChangeMe!2026'; // demo and tests only; a live install must choose its own
+
 export async function seed(demo: boolean, tickets = demo) {
   await migrate();
+  const adminEmail = process.env.ADMIN_EMAIL ?? 'admin@crm.local';
+  if (demo) {
+    // Demo data turns two-factor off and adds accounts with a published password: never on a live system.
+    const [real] = await sql`select count(*)::int as n from users where email not like '%@crm.local' and email <> ${adminEmail}`.catch(() => [{ n: 0 }]);
+    if (real?.n && process.env.DEMO_ON_EXISTING !== 'yes')
+      throw new Error('Refusing to load demo data: this database has real user accounts. (Set DEMO_ON_EXISTING=yes only on a test system.)');
+  }
   for (const [code, name] of DEPTS) await sql`insert into departments (code, name) values (${code}, ${name}) on conflict (code) do nothing`;
   const dept = Object.fromEntries((await sql`select id, code from departments`).map((d) => [d.code, d.id as number]));
   for (const [name, codes, c, h, n] of CATS)
@@ -43,10 +52,11 @@ export async function seed(demo: boolean, tickets = demo) {
   for (const [day, name] of HOLIDAYS) await sql`insert into holidays values (${day}, ${name}) on conflict do nothing`;
   await sql`insert into sites (code, name, region) values ('MAIN', 'Main Laboratory', 'Head Office') on conflict do nothing`;
 
-  const adminEmail = process.env.ADMIN_EMAIL ?? 'admin@crm.local';
   const [{ n }] = await sql`select count(*)::int as n from users where role = 'admin'`;
   if (!n) {
-    const pw = process.env.ADMIN_PASSWORD ?? 'ChangeMe!2026';
+    const pw = process.env.ADMIN_PASSWORD || (demo ? DEMO_ADMIN_PASSWORD : '');
+    if (!demo && (pw.length < 12 || pw === DEMO_ADMIN_PASSWORD))
+      throw new Error('Set ADMIN_PASSWORD to at least 12 characters (not the demo password) to create the first administrator. scripts/init.sh generates one.');
     await sql`insert into users (email, name, role, password_hash) values (${adminEmail}, 'System Administrator', 'admin', ${hashPassword(pw)})`;
     console.log(`admin created: ${adminEmail}`);
   }

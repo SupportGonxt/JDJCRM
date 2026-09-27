@@ -1,0 +1,35 @@
+name: Release
+# Tag vX.Y.Z to publish a release: CI-built images as one tarball (works for air-gapped sites too), with a checksum.
+# Install or upgrade on the server:  docker load < pelo-crm-X.Y.Z-images.tar.gz  →  set BATON_VERSION=X.Y.Z in .env
+#                                    →  ./scripts/backup.sh  →  docker compose up -d --no-build
+on:
+  push:
+    tags: ['v*.*.*']
+permissions:
+  contents: write
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build versioned images
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          docker build --target api --build-arg APP_VERSION="$v" -t "baton-api:$v" .
+          docker build --target web -t "baton-web:$v" .
+          docker pull postgres:16-alpine
+          docker save "baton-api:$v" "baton-web:$v" postgres:16-alpine | gzip > "pelo-crm-$v-images.tar.gz"
+          sha256sum "pelo-crm-$v-images.tar.gz" > "pelo-crm-$v-images.tar.gz.sha256"
+      - name: Scan before publishing (Trivy)
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          for img in "baton-api:$v" "baton-web:$v"; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest \
+              image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress "$img"
+          done
+      - name: Publish the release
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" "pelo-crm-$v-images.tar.gz" "pelo-crm-$v-images.tar.gz.sha256" \
+            --title "Pelo CRM $v" --notes "Upgrade: see docs/RUNBOOK.md → Upgrades. Take a backup first; migrations run on start."

@@ -6,6 +6,7 @@ import { audit, fail, sql } from './db';
 import { env } from './env';
 import { hashPassword, sha256, token, totpSecret, verifyPassword, verifyTotp } from './crypto';
 import { adAuthenticate } from './ldap';
+import { peek, redeem, sendLink } from './invites';
 
 export type User = { id: string; email: string; name: string; role: Role; department_id: number | null; site_id: number | null; mfa_enabled: boolean };
 declare module 'fastify' {
@@ -135,6 +136,29 @@ export function authPlugin(app: FastifyInstance) {
     await sql`update users set password_hash = ${hashPassword(next)} where id = ${req.user.id}`;
     await sql`delete from sessions where user_id = ${req.user.id} and id <> ${req.sid}`;
     await audit(sql, { actor: req.user.id, action: 'auth.password_changed', entity: 'user', id: req.user.id, ip: req.ip });
+    return { ok: true };
+  });
+
+  // Forgot password: same answer whether or not the account exists (no account discovery). AD passwords are reset in AD.
+  const asked = new Map<string, number[]>();
+  app.post('/api/auth/forgot', { config: { auth: 'public' } }, async (req) => {
+    const { email } = z.object({ email: z.string().trim().min(3).max(200) }).parse(req.body);
+    const recent = (asked.get(req.ip) ?? []).filter((t) => t > Date.now() - 15 * 60_000);
+    if (recent.length >= 5) fail(429, 'Too many requests from this device. Try again later.');
+    asked.set(req.ip, [...recent, Date.now()]);
+    const [u] = await sql`select id, email, name from users where email = ${email} and active and auth = 'local'`;
+    if (u) await sendLink(sql, u as any, 'reset', null);
+    return { ok: true };
+  });
+
+  app.get('/api/auth/token/:token', { config: { auth: 'public' } }, async (req) => {
+    const { token: t } = z.object({ token: z.string().min(20).max(100) }).parse(req.params);
+    return peek(sql, t);
+  });
+
+  app.post('/api/auth/set-password', { config: { auth: 'public' } }, async (req) => {
+    const b = z.object({ token: z.string().min(20).max(100), password: z.string().min(10).max(200) }).parse(req.body);
+    await sql.begin((tx) => redeem(tx, b.token, b.password, req.ip));
     return { ok: true };
   });
 
