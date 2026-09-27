@@ -71,7 +71,7 @@ jobs:
         run: printf 'SITE_ADDRESS=localhost\nAPP_URL=https://localhost\nADMIN_PASSWORD=Launch-Admin!2026\nSMTP_REQUIRE_TLS=false\nCOMPOSE_PROFILES=skylims\nBATON_VERSION=ci-%s\n' "$GITHUB_SHA" > .env
       - name: Install with the real script
         run: ./scripts/init.sh
-      - name: Wait for the stack (readiness: database, worker, disk)
+      - name: "Wait for the stack (readiness: database, worker, disk)"
         run: |
           for i in $(seq 1 60); do curl -skf https://localhost/api/health/ready && break; sleep 2; done
           curl -skf https://localhost/api/health/ready
