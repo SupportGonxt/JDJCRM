@@ -30,9 +30,16 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1
 CMD ["node", "dist/server.js"]
 
-# Caddy rebuilt with the current Go toolchain: the upstream binary can lag behind Go security fixes (CI scans it).
+# Caddy rebuilt with the current Go toolchain and patched libraries: the upstream binary can lag behind
+# security fixes (CI scans it with Trivy). Same standard modules as the official image.
 FROM golang:1-alpine AS caddy
-RUN CGO_ENABLED=0 go install -trimpath -ldflags='-s -w' github.com/caddyserver/caddy/v2/cmd/caddy@latest
+WORKDIR /build
+RUN go mod init caddybuild \
+ && printf 'package main\n\nimport (\n\tcaddycmd "github.com/caddyserver/caddy/v2/cmd"\n\t_ "github.com/caddyserver/caddy/v2/modules/standard"\n)\n\nfunc main() { caddycmd.Main() }\n' > main.go \
+ && go get github.com/caddyserver/caddy/v2@latest \
+ && go get golang.org/x/crypto@latest golang.org/x/net@latest golang.org/x/text@latest google.golang.org/grpc@latest \
+ && go mod tidy \
+ && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /go/bin/caddy .
 
 FROM caddy:2-alpine AS web
 RUN apk upgrade --no-cache
