@@ -17,13 +17,16 @@ jobs:
           v="${GITHUB_REF_NAME#v}"
           docker build --target api --build-arg APP_VERSION="$v" -t "baton-api:$v" .
           docker build --target web -t "baton-web:$v" .
-          docker tag "baton-api:$v" "baton-api:$GITHUB_REF_NAME" # for the scan step below
           docker pull postgres:16-alpine
           docker save "baton-api:$v" "baton-web:$v" postgres:16-alpine | gzip > "pelo-crm-$v-images.tar.gz"
           sha256sum "pelo-crm-$v-images.tar.gz" > "pelo-crm-$v-images.tar.gz.sha256"
-      - name: Scan before publishing
-        uses: aquasecurity/trivy-action@0.28.0
-        with: { scan-type: image, image-ref: "baton-api:${{ github.ref_name }}", severity: "HIGH,CRITICAL", ignore-unfixed: true, exit-code: "1" }
+      - name: Scan before publishing (Trivy)
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          for img in "baton-api:$v" "baton-web:$v"; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest \
+              image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress "$img"
+          done
       - name: Publish the release
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |

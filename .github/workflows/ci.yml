@@ -76,12 +76,12 @@ jobs:
           for i in $(seq 1 60); do curl -skf https://localhost/api/health/ready && break; sleep 2; done
           curl -skf https://localhost/api/health/ready
           docker compose ps
-      - name: Scan the api image for fixable high or critical vulnerabilities
-        uses: aquasecurity/trivy-action@0.28.0
-        with: { scan-type: image, image-ref: "baton-api:ci-${{ github.sha }}", severity: "HIGH,CRITICAL", ignore-unfixed: true, exit-code: "1" }
-      - name: Scan the web image for fixable high or critical vulnerabilities
-        uses: aquasecurity/trivy-action@0.28.0
-        with: { scan-type: image, image-ref: "baton-web:ci-${{ github.sha }}", severity: "HIGH,CRITICAL", ignore-unfixed: true, exit-code: "1" }
+      - name: Scan both images for fixable high or critical vulnerabilities (Trivy)
+        run: |
+          for img in "baton-api:ci-$GITHUB_SHA" "baton-web:ci-$GITHUB_SHA"; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest \
+              image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress "$img"
+          done
       - name: Security headers present
         run: |
           curl -skI https://localhost/ | tee headers.txt

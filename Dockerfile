@@ -18,7 +18,9 @@ COPY package.json package-lock.json ./
 COPY packages/core/package.json packages/core/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
-RUN npm ci --omit=dev -w @baton/api && npm cache clean --force
+RUN npm ci --omit=dev -w @baton/api && npm cache clean --force \
+ && rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn* /usr/local/bin/yarn /usr/local/bin/yarnpkg
+# ↑ the runtime only runs `node`; package managers are not shipped (smaller image, fewer scanner findings)
 COPY --from=build /src/apps/api/dist apps/api/dist
 COPY apps/api/migrations apps/api/migrations
 RUN mkdir -p /data && chown node /data
