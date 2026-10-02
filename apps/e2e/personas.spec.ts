@@ -14,10 +14,11 @@ const PERSONAS: { email: string; lands: string; nav: string[]; refused: [string,
   { email: 'admin@crm.local', lands: '/admin', nav: ['Administration'], refused: [] },
 ];
 
+// The CI stack's self-signed certificate stops the offline service worker registering; real sites install the CA.
 function watchErrors(page: Page) {
   const errs: string[] = [];
   page.on('pageerror', (e) => errs.push(e.message));
-  page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && errs.push(m.text()));
+  page.on('console', (m) => m.type() === 'error' && !/Failed to load resource|SSL certificate error occurred when fetching the script/.test(m.text()) && errs.push(m.text()));
   return errs;
 }
 
