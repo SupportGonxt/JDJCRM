@@ -19,7 +19,8 @@ A yellow **Repeat** warning means the same failure has been raised before by thi
 3. Close bleeds once the report is filed (**Close N ended** closes all finished ones at once).
 
 ## Handy
-- `/` searches everything: ticket number, patient, requisition, complainant.
+- `⌘K` on a Mac (`Ctrl K` on Windows), or `/`, searches everything: ticket number, patient, requisition, complainant.
+- `⌘↩` (`Ctrl Enter`) sends the note or response you are typing. `Esc` closes notifications.
 - Type `@` in a note to notify a colleague.
 - **Insert canned response** fills standard wording.
 - Save filters on a board with **Save view**.

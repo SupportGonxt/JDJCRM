@@ -18,20 +18,33 @@ function useTheme() {
   return { dark, toggle };
 }
 
+/** Shortcut labels as each platform writes them: ⌘K on a Mac, Ctrl K elsewhere. */
+export const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+export const MOD = isMac ? '⌘' : 'Ctrl ';
+
 function Notifications() {
   const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const key = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    const click = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
+    window.addEventListener('keydown', key);
+    window.addEventListener('mousedown', click);
+    return () => { window.removeEventListener('keydown', key); window.removeEventListener('mousedown', click); };
+  }, [open]);
   const nav = useNavigate();
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ['notifications'], queryFn: () => api('/notifications'), refetchInterval: 60_000 });
   const read = useMutation({ mutationFn: (ids?: number[]) => api('/notifications/read', { body: { ids } }), onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }) });
   return (
-    <div className="relative">
+    <div className="relative" ref={box}>
       <Button variant="ghost" size="sm" aria-label="Notifications" onClick={() => setOpen(!open)} className="relative">
         <Bell size={18} />
         {data?.unread > 0 && <span className="num absolute -top-0.5 -right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-bad px-1 text-[10px] text-white">{data.unread}</span>}
       </Button>
       {open && (
-        <div className="card absolute right-0 z-30 mt-2 max-h-[70vh] w-[min(380px,calc(100vw-2rem))] overflow-auto" onMouseLeave={() => setOpen(false)}>
+        <div className="card absolute right-0 z-30 mt-2 max-h-[70vh] w-[min(380px,calc(100vw-2rem))] overflow-auto">
           <div className="flex items-center justify-between border-b border-line px-4 py-2.5 text-sm font-semibold">
             Notifications
             <button className="text-xs font-normal text-brand" onClick={() => read.mutate(undefined)}>Mark all read</button>
@@ -69,6 +82,11 @@ export function Shell() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const mod = isMac ? e.metaKey : e.ctrlKey;
+      // ⌘K / Ctrl K: search from anywhere. ⌘↩ / Ctrl Enter: send the form you are typing in (notes, responses).
+      if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); search.current?.focus(); search.current?.select(); return; }
+      if (mod && e.key === 'Enter') { const f = (e.target as HTMLElement).closest('form'); if (f) { e.preventDefault(); f.requestSubmit(); } return; }
+      if (e.key === 'Escape' && e.target === search.current) { search.current?.blur(); return; }
       if ((e.target as HTMLElement).closest('input,textarea,select,[contenteditable]')) return;
       if (e.key === '/') { e.preventDefault(); search.current?.focus(); }
       if (e.key === 'n' && me && can(me.role, 'ticket.open')) nav('/tickets/new');
@@ -138,9 +156,9 @@ export function Shell() {
               <input
                 ref={search}
                 placeholder="Search ticket, patient, requisition, complainant…"
-                className="h-9 w-full rounded-lg border border-line bg-surface pr-10 pl-9 text-sm focus:border-brand focus:outline-none"
+                className="h-9 w-full rounded-lg border border-line bg-surface pr-16 pl-9 text-sm focus:border-brand focus:outline-none"
               />
-              <kbd className="num absolute top-1/2 right-2.5 hidden -translate-y-1/2 rounded border border-line px-1.5 text-[11px] text-muted sm:block">/</kbd>
+              <kbd className="num absolute top-1/2 right-2.5 hidden -translate-y-1/2 rounded border border-line px-1.5 text-[11px] text-muted sm:block" title="Search shortcut">{MOD}K</kbd>
             </form>
           )}
           <div className="ml-auto flex items-center gap-1">

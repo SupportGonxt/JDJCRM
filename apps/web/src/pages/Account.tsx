@@ -35,7 +35,7 @@ export function Account() {
           <form className="space-y-3" onSubmit={(e) => verify.mutate(formValues(e).code)}>
             <img src={qr.qr} alt="Authenticator QR code" width={180} height={180} className="rounded bg-white p-1" />
             <code className="num block text-xs break-all text-muted">{qr.secret}</code>
-            <Field label="6-digit code"><Input name="code" inputMode="numeric" required className="num" /></Field>
+            <Field label="6-digit code"><Input name="code" inputMode="numeric" autoComplete="one-time-code" required className="num" /></Field>
             <ErrorText error={verify.error} />
             <Button>Turn on</Button>
           </form>

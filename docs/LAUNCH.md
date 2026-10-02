@@ -32,8 +32,10 @@
 | Readiness | `/api/health/ready` returns 503 until the database, worker and disk are all healthy. CI waits on it. |
 | Supply chain | `npm audit` (high or critical fails the build) and a Trivy scan of both images (fixable high or critical fails). |
 | Logs | Capped at 5 × 10 MB per container. |
+| Every type of user | Each demo role (CS agent, supervisor, four department responders, department manager, management, admin) signs in, lands on its home screen, sees exactly its menu, opens every screen without an error, and is refused (403) by the API outside its role. |
+| Mac | The user-type, query and go-live journeys also run in Safari's engine (WebKit) at MacBook size. `⌘K` search, `⌘↩` to send, `Esc` to close; Safari password and code autofill; Add to Dock icon. |
 
-Totals: 79 API/DB tests and 18 browser tests. The browser tests run against the dev servers **and** the Docker stack.
+Totals: 79 API/DB tests and 28 browser tests (the Safari engine repeats 13 of them). The browser tests run against the dev servers **and** the Docker stack.
 
 ## Decisions JDJ must make before go-live
 

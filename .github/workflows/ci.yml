@@ -43,7 +43,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium webkit
         working-directory: apps/e2e
       - run: |
           echo "MASTER_KEY=$(head -c32 /dev/urandom | base64)" >> "$GITHUB_ENV"
@@ -96,7 +96,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
         working-directory: apps/e2e
       - name: Fresh install journey (two-factor enforced, no demo data)
-        run: npx playwright test install.spec.ts
+        run: npx playwright test install.spec.ts --project=chromium
         working-directory: apps/e2e
         env: { E2E_BASE_URL: "https://localhost", E2E_FRESH_INSTALL: "1", ADMIN_PASSWORD: "Launch-Admin!2026" }
       - name: Load demo data (the journeys below sign in without two-factor)
@@ -104,7 +104,7 @@ jobs:
           docker compose exec -T -e DEMO_ON_EXISTING=yes api node dist/seed.js --demo # a CI system: the fresh-install journey created a real user
           docker compose exec -T db psql -U baton -qc "update users set mfa_enabled = false, totp_secret = null where email = 'admin@crm.local'"
       - name: Every journey through Caddy/HTTPS
-        run: npx playwright test
+        run: npx playwright test --project=chromium
         working-directory: apps/e2e
         env: { E2E_BASE_URL: "https://localhost", ADMIN_PASSWORD: "Launch-Admin!2026" }
       - name: Backup, restore and key rotation with the real scripts
@@ -117,7 +117,7 @@ jobs:
           ls secrets/master_key.retired.*
           for i in $(seq 1 60); do curl -skf https://localhost/api/health && break; sleep 2; done
       - name: After restore and rotation, data and encrypted photos are intact
-        run: npx playwright test ops.spec.ts
+        run: npx playwright test ops.spec.ts --project=chromium
         working-directory: apps/e2e
         env: { E2E_BASE_URL: "https://localhost", E2E_AFTER_OPS: "1", ADMIN_PASSWORD: "Launch-Admin!2026" }
       - if: always()

@@ -16,3 +16,5 @@ One page per role. Print them for launch-day training.
 - Otherwise use the invitation e-mail to choose a password.
 - Client Services, management and administrators also enrol an authenticator app (Microsoft or Google Authenticator) at first sign-in.
 - Forgot your password? Use **Forgot password?** on the sign-in page (local accounts only). AD passwords are changed in Windows.
+
+Pelo CRM runs in Safari, Chrome, Edge or Firefox. On a Mac, Safari can keep your password and two-factor code in Passwords (or iCloud Keychain); you can also add Pelo CRM to the Dock from Safari (File → Add to Dock).
