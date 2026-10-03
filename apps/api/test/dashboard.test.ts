@@ -44,8 +44,12 @@ describe.skipIf(!url)('dashboard and analytics (API + DB)', async () => {
       where id = (select id from assignments where state in ('assigned', 'in_progress') order by created_at limit 1)`;
     expect((await get('nurse', '/api/dashboard/live')).statusCode).toBe(403);
     const r = (await get('cs', '/api/dashboard/live')).json();
-    expect(r.tiles.bleeds_requested).toBeGreaterThanOrEqual(8);
-    expect(r.tiles.queries_logged).toBeGreaterThanOrEqual(5);
+    // Demo items are back-dated by up to 5 h, so how many fall "today" (SAST) depends on the hour the suite runs.
+    const [n] = await sql`select (select count(*)::int from bleeds where opened_at >= ${today + ' 00:00+02'}::timestamptz) as b,
+      (select count(*)::int from tickets where created_at >= ${today + ' 00:00+02'}::timestamptz) as q`;
+    expect(r.tiles.bleeds_requested).toBe(n.b);
+    expect(r.tiles.queries_logged).toBe(n.q);
+    expect(n.b + n.q).toBeGreaterThan(0);
     expect(r.tiles.breaches).toBe(r.register.length);
     expect(r.register.some((x: any) => x.kind === 'bleed' && x.stage === 'Logistics' && x.reason)).toBe(true);
     expect(r.register.some((x: any) => x.kind === 'query' && x.running)).toBe(true);

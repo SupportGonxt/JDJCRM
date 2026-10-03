@@ -11,7 +11,7 @@ jobs:
   images:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Build versioned images
         run: |
           v="${GITHUB_REF_NAME#v}"
